@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    /* Un blanco ligeramente azulado */
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Deep Royal Blue Theme */
+    --primary: 221 83% 53%;
+    /* Azul Real Vibrante */
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221 83% 53%;
+
+    --radius: 1rem;
+    /* Bordes más redondeados */
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 199 89% 48%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground min-h-screen;
+    background-image:
+      radial-gradient(at 0% 0%, hsla(221, 83%, 93%, 1) 0, transparent 50%),
+      radial-gradient(at 50% 0%, hsla(199, 89%, 95%, 1) 0, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(221, 83%, 93%, 1) 0, transparent 50%);
+  }
+}
+
+@layer components {
+  .bg-blue-gradient {
+    @apply bg-gradient-to-r from-blue-700 via-blue-600 to-blue-500;
+  }
+
+  .bg-mesh-gradient {
+    background-color: hsla(221, 83%, 53%, 1);
+    background-image:
+      radial-gradient(at 40% 20%, hsla(199, 89%, 48%, 1) 0, transparent 50%),
+      radial-gradient(at 80% 0%, hsla(199, 89%, 60%, 1) 0, transparent 50%),
+      radial-gradient(at 0% 50%, hsla(221, 83%, 45%, 1) 0, transparent 50%),
+      radial-gradient(at 80% 50%, hsla(217, 91%, 60%, 1) 0, transparent 50%),
+      radial-gradient(at 0% 100%, hsla(221, 83%, 53%, 1) 0, transparent 50%),
+      radial-gradient(at 80% 100%, hsla(199, 89%, 48%, 1) 0, transparent 50%),
+      radial-gradient(at 0% 0%, hsla(217, 91%, 60%, 1) 0, transparent 50%);
+  }
+
+  .bg-sidebar-gradient {
+    @apply bg-gradient-to-b from-blue-800 via-blue-900 to-[#0e1c3e];
+  }
+}
