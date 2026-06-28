@@ -1,5 +1,7 @@
 // API Service for Farma Backend
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api2';
+//export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL2 || 'http://localhost:3000/api';
+console.log(API_BASE_URL);
 
 // Generic fetch wrapper with error handling
 async function fetchAPI(endpoint, options = {}) {

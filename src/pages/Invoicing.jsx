@@ -111,6 +111,7 @@ const Invoicing = () => {
     };
 
     const handlePrint = async (sale) => {
+     
         try {
             let saleDetails = sale;
             if (!sale.items) {

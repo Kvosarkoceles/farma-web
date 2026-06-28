@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Search, ShoppingCart, Trash2, Plus, Minus, CreditCard, Banknote, Package, Loader2, User, X } from 'lucide-react';
 import Modal from '@/components/ui/modal';
 import { productsAPI, salesAPI, clientsAPI } from '@/services/api';
+import { ProductImage } from '@/components/ui/ProductImage';
 
 const POS = () => {
     const [cart, setCart] = useState([]);
@@ -106,6 +107,7 @@ const POS = () => {
 
             const result = await salesAPI.create(saleData);
             setSaleResult(result);
+            // handlePrint(result);
             setLastTotal(currentTotal);
             setIsSuccessModalOpen(true);
             setCart([]);
@@ -117,6 +119,89 @@ const POS = () => {
         } finally {
             setIsProcessing(false);
         }
+    };
+
+    const handlePrint = async (sale) => {
+        console.log('Attempting to print sale:', sale);
+        try {
+            let saleDetails = sale;
+            if (!sale.items) {
+                try {
+                    saleDetails = await salesAPI.getById(sale.id);
+                } catch (e) {
+                    console.error("Could not fetch details for print", e);
+                }
+            }
+
+            const htmlContent = generateInvoiceHTML(saleDetails);
+
+            // Use Electron IPC if running in desktop app
+            if (isElectron()) {
+                try {
+                    const { ipcRenderer } = window.require('electron');
+                    ipcRenderer.send('print-invoice', htmlContent);
+                    return;
+                } catch (e) {
+                    console.warn('Electron IPC not available, falling back to window.open', e);
+                }
+            }
+
+            // Fallback: standard browser print (web version)
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(htmlContent + `
+                    <script>
+                        window.onload = function() { window.print(); window.close(); }
+                    </script>
+                `);
+            printWindow.document.close();
+        } catch (err) {
+            alert('Error al imprimir: ' + err.message);
+        }
+    };
+    const isElectron = () => {
+        return typeof window !== 'undefined' && window.process && window.process.type;
+    };
+
+    const generateInvoiceHTML = (saleDetails) => {
+        return `
+            <html>
+                <head>
+                    <title>Factura #${saleDetails.id}</title>
+                    <style>
+                        body { font-family: 'Courier New', monospace; padding: 20px; max-width: 300px; margin: 0 auto; }
+                        .header { text-align: center; margin-bottom: 20px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
+                        .row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+                        .total { border-top: 1px dashed #000; margin-top: 10px; padding-top: 10px; font-weight: bold; }
+                        .footer { margin-top: 20px; text-align: center; font-size: 12px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h3>FARMACIA DULCE ESPERANZA</h3>
+                        <p>RUC: J0310000000000</p>
+                        <p>Tel: +505 2222-2222</p>
+                        <p>Factura: #${saleDetails.id}</p>
+                        <p>Cliente: ${saleDetails.client_name || 'Consumidor Final'}</p>
+                        <p>Fecha: ${new Date(saleDetails.timestamp).toLocaleString('es-NI')}</p>
+                    </div>
+                    <div>
+                        ${saleDetails.items ? saleDetails.items.map(item => `
+                            <div class="row">
+                                <span>${item.quantity} x ${item.product_name || 'Producto'}</span>
+                                <span>$ ${(item.quantity * item.price_at_sale).toFixed(2)}</span>
+                            </div>
+                        `).join('') : '<p>Detalles no disponibles</p>'}
+                    </div>
+                    <div class="row total">
+                        <span>TOTAL</span>
+                        <span>$ ${parseFloat(saleDetails.total).toFixed(2)}</span>
+                    </div>
+                    <div class="footer">
+                        <p>¡Gracias por su compra!</p>
+                    </div>
+                </body>
+            </html>
+        `;
     };
 
     const subtotal = cart.reduce((acc, item) => acc + (parseFloat(item.price) * item.quantity), 0);
@@ -131,7 +216,6 @@ const POS = () => {
         client.client_id?.toLowerCase().includes(clientSearch.toLowerCase()) ||
         client.phone?.includes(clientSearch)
     );
-
     return (
         <Layout>
             <div className="flex h-[calc(100vh)] bg-transparent">
@@ -172,9 +256,11 @@ const POS = () => {
                                     className={`cursor-pointer hover:shadow-md transition-shadow group overflow-hidden border-none ${product.stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                                     onClick={() => addToCart(product)}
                                 >
-                                    <div className="h-24 bg-blue-50 flex items-center justify-center text-blue-200 group-hover:bg-blue-100 transition-colors">
-                                        <Package size={40} />
+                                    <div className="h-36 bg-blue-50 flex items-center justify-center text-blue-200 group-hover:bg-blue-100 transition-colors overflow-hidden">
+                                        <ProductImage product={product} />
                                     </div>
+
+
                                     <CardContent className="p-4">
                                         <h3 className="font-bold text-gray-800 text-lg mb-1 truncate">{product.name}</h3>
                                         <div className="flex justify-between items-center">
@@ -350,6 +436,7 @@ const POS = () => {
                     <Button className="w-full font-bold" onClick={() => {
                         setIsSuccessModalOpen(false);
                         setSaleResult(null);
+                        handlePrint(saleResult);
                     }}>
                         Aceptar e Imprimir Ticket
                     </Button>

@@ -3,7 +3,8 @@ import Layout from '@/components/layout/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, Filter, Edit2, Trash2, ArrowUpDown, Loader2 } from 'lucide-react';
+import { Search, Plus, Filter, Edit2, Trash2, ArrowUpDown, Loader2, Eye, Package } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
 import Modal from '@/components/ui/modal';
 import { productsAPI } from '@/services/api';
@@ -24,6 +25,10 @@ const Purchases = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [formErrors, setFormErrors] = useState({});
 
+    //modal state
+    const [selectedSale, setSelectedSale] = useState(null);
+    const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+    const [loadingDetails, setLoadingDetails] = useState(false);
     // Form state
     const [formData, setFormData] = useState({
         sku: '',
@@ -36,6 +41,7 @@ const Purchases = () => {
     useEffect(() => {
         loadProducts();
         loadPurchases();
+        console.log('Loaded purchases:', purchases);
     }, []);
 
     const loadProducts = async () => {
@@ -59,6 +65,7 @@ const Purchases = () => {
             const data = await purchasesAPI.getDetailAll();
             console.log('Loaded purchases:', data);
             setPurchases(data);
+
         } catch (err) {
             setError(err);
             console.error('Error loading purchases:', err);
@@ -180,12 +187,72 @@ const Purchases = () => {
     );
 
     const filteredPurchases = purchases.filter(purchase =>
-        purchase.purchase_id.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
+        // purchase.purchase_id.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
         purchase.supplier_id?.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
         purchase.supplier_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         purchase.product_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         purchase.purchase.status?.toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const handleViewDetails = async (sale) => {
+        // console.log(sale);
+
+        setIsDetailsModalOpen(true);
+        setLoadingDetails(true);
+     
+     
+
+
+        try {
+              const index = filteredPurchases.findIndex(item => item.id === sale);
+        const saleObject = filteredPurchases[index];
+            setSelectedSale(saleObject);
+        } catch (err) {
+            alert('Error al cargar detalles: ' + err.message);
+            setIsDetailsModalOpen(false);
+        } finally {
+            setLoadingDetails(false);
+        }
+
+
+
+
+
+        // console.log(saleObject);
+        // console.log('Índice:', index);
+
+
+
+        //         console.log(filteredPurchases);
+        // setSelectedSale(details);
+
+
+        // try {
+        //     const details = await salesAPI.getById(sale.id);
+        //     setSelectedSale(details);
+        // } catch (err) {
+        //     alert('Error al cargar detalles: ' + err.message);
+        //     setIsDetailsModalOpen(false);
+        // } finally {
+        //     setLoadingDetails(false);
+        // }
+    };
+
+     const formatCurrency = (amount) => {
+        return `$ ${new Intl.NumberFormat('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`;
+    };
+
+
+    const formatDate = (timestamp) => {
+        return new Date(timestamp).toLocaleDateString('es-NI', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
 
     return (
         <Layout>
@@ -230,7 +297,10 @@ const Purchases = () => {
                                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                             </div>
                         ) : error ? (
-                            <div className="text-center py-20 text-red-500">
+                            <div className="text-center py-20 text-r const formatCurrency = (amount) => {
+        return `$ ${new Intl.NumberFormat('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`;
+    };
+ed-500">
                                 <p>Error al cargar productos</p>
                                 <Button onClick={loadProducts} className="mt-4">Reintentar</Button>
                             </div>
@@ -242,10 +312,10 @@ const Purchases = () => {
                                             <tr className="bg-slate-50/50 border-b border-gray-100">
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">ID Compra</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Proveedor</th>
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Producto</th>
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Precio Unitario de Venta</th>
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Cantidad</th>
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Precio Unitario de Compra</th>
+                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Cantindad de productos</th>
+
+
+
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider text-right">Total</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Método Pago</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider text-center">Estado</th>
@@ -260,6 +330,8 @@ const Purchases = () => {
                                                 </tr>
                                             ) : (
                                                 filteredPurchases.map((purchase) => {
+
+                                                    // console.log(purchase);
                                                     return (
                                                         // <tr key={purchase.id} className="hover:bg-blue-50/30 transition-colors group">
                                                         <tr
@@ -271,25 +343,23 @@ const Purchases = () => {
                                                                     : "hover:bg-blue-50/30"
                                                             )}
                                                         >
-                                                            <td className="px-6 py-4 font-mono text-xs text-gray-800 font-bold">#{purchase.purchase_id}</td>
+                                                            <td className="px-6 py-4 font-mono text-xs text-gray-800 font-bold">#{purchase.id}</td>
                                                             <td className="px-6 py-4">
                                                                 <span className="font-medium text-gray-800">{purchase.supplier_name || '-'}</span>
                                                             </td>
                                                             <td className="px-6 py-4">
-                                                                <span className="font-medium text-gray-800">{purchase.product_name || '-'}</span>
-                                                            </td>
-                                                            <td className="px-6 py-4">
-                                                                $ {parseFloat(purchase.price_venta || 0).toFixed(2)}
-                                                            </td>
-                                                            <td className="px-6 py-4">
-                                                                <span className="font-medium text-gray-800">{purchase.quantity || '-'}</span>
-                                                            </td>
-                                                            <td className="px-6 py-4">
-                                                                $ {parseFloat(purchase.cost_price || 0).toFixed(2)}
+                                                                <span className="font-medium text-gray-800">{purchase.total_quantity || '-'}</span>
                                                             </td>
 
+
+
+
+                                                            {/* <td className="px-6 py-4">
+                                                                $ {parseFloat(purchase.cost_price || 0).toFixed(2)}
+                                                            </td> */}
+
                                                             <td className="px-6 py-4 text-right font-black text-gray-700">
-                                                                $ {parseFloat((purchase.quantity * purchase.cost_price) || 0).toFixed(2)}
+                                                                ${parseFloat((purchase.total) || 0).toFixed(2)}
                                                             </td>
                                                             <td className="px-6 py-4">
                                                                 <span className="bg-blue-50 px-3 py-1 rounded-full text-xs font-semibold text-blue-600 border border-blue-200">
@@ -312,6 +382,14 @@ const Purchases = () => {
                                                             </td>
                                                             <td className="px-6 py-4 text-right">
                                                                 <div className="flex justify-end gap-2">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-9 w-9 text-gray-400 hover:text-primary hover:bg-blue-50"
+                                                                        onClick={() => handleViewDetails(purchase.id)}
+                                                                    >
+                                                                        <Eye size={18} />
+                                                                    </Button>
                                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-100" onClick={() => openEditModal(purchase)}>
                                                                         <Edit2 size={16} />
                                                                     </Button>
@@ -337,6 +415,74 @@ const Purchases = () => {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Sale Details Modal */}
+            <Modal
+                isOpen={isDetailsModalOpen}
+                onClose={() => setIsDetailsModalOpen(false)}
+                title={`Detalle de Venta #${selectedSale?.id || ''}`}
+                className="max-w-2xl"
+                footer={
+                    <Button onClick={() => setIsDetailsModalOpen(false)}>Cerrar</Button>
+                }
+            >
+                {loadingDetails ? (
+                    <div className="flex justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                ) : selectedSale ? (
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-gray-100">
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Fecha</p>
+                                <p className="font-semibold text-gray-800">{formatDate(selectedSale.timestamp)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Provedor</p>
+                                <p className="font-semibold text-gray-800">{selectedSale.name || 'Provedor Final'}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Método de Pago</p>
+                                <p className="font-semibold text-gray-800">{selectedSale.payment_method}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+                                <Package size={18} className="text-primary" /> Productos
+                            </h4>
+                            <div className="border rounded-xl overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 text-gray-500 font-medium">
+                                        <tr>
+                                            <th className="px-4 py-3">Producto</th>
+                                            <th className="px-4 py-3 text-center">Cant.</th>
+                                            <th className="px-4 py-3 text-right">Precio Unit.</th>
+                                            <th className="px-4 py-3 text-right">Subtotal</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {selectedSale.purchase_items?.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td className="px-4 py-3 font-medium text-gray-800">{item.name || `Producto #${item.product_id}`}</td>
+                                                <td className="px-4 py-3 text-center">{item.quantity}</td>
+                                                <td className="px-4 py-3 text-right">{formatCurrency(item.cost_price)}</td>
+                                                <td className="px-4 py-3 text-right font-bold">{formatCurrency(item.quantity * item.cost_price)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot className="bg-blue-50/50 font-bold text-gray-800">
+                                        <tr>
+                                            <td colSpan="3" className="px-4 py-3 text-right">Total</td>
+                                            <td className="px-4 py-3 text-right text-primary text-lg">{formatCurrency(selectedSale.total)}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                ) : null}
+            </Modal>
 
             {/* Add Product Modal */}
             <Modal

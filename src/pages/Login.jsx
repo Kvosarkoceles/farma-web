@@ -16,6 +16,7 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = async (e) => {
+        console.log(e);
         e.preventDefault();
         setLoading(true);
         setError('');
@@ -24,13 +25,24 @@ const Login = () => {
         const password = e.target.password.value;
 
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            const url = `${API_BASE_URL}/auth/login`;
+            console.log('Login request to:', url, 'username:', username);
+
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
 
-            const data = await response.json();
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (parseErr) {
+                data = { raw: text };
+            }
+
+            console.log('Login response status:', response.status, 'body:', data);
 
             if (response.ok) {
                 localStorage.setItem('farma_user', JSON.stringify(data.user));
@@ -39,6 +51,7 @@ const Login = () => {
                 setError(data.error || 'Error al iniciar sesión');
             }
         } catch (err) {
+            console.error('Fetch error during login:', err);
             setError('Error de conexión con el servidor');
         } finally {
             setLoading(false);
