@@ -7,7 +7,8 @@ import { Lock, User, Activity, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 import logo from '@/assets/logo.webp';
-import { API_BASE_URL } from '@/services/api';
+import { authAPI } from '@/services/api';
+import { USER_STORAGE_KEY } from '@/lib/auth';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -16,7 +17,6 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     const handleLogin = async (e) => {
-        console.log(e);
         e.preventDefault();
         setLoading(true);
         setError('');
@@ -25,34 +25,16 @@ const Login = () => {
         const password = e.target.password.value;
 
         try {
-            const url = `${API_BASE_URL}/auth/login`;
-            console.log('Login request to:', url, 'username:', username);
+            const data = await authAPI.login({ username, password });
 
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
-
-            const text = await response.text();
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch (parseErr) {
-                data = { raw: text };
-            }
-
-            console.log('Login response status:', response.status, 'body:', data);
-
-            if (response.ok) {
-                localStorage.setItem('farma_user', JSON.stringify(data.user));
+            if (data?.user) {
+                localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data.user));
                 navigate('/dashboard');
             } else {
-                setError(data.error || 'Error al iniciar sesión');
+                setError('Credenciales invalidas');
             }
         } catch (err) {
-            console.error('Fetch error during login:', err);
-            setError('Error de conexión con el servidor');
+            setError(err.message || 'Error de conexión con el servidor');
         } finally {
             setLoading(false);
         }

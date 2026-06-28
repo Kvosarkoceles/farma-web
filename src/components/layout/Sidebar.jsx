@@ -1,13 +1,16 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Truck, Receipt, Users, Settings as SettingsIcon, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Truck, Receipt, Users, Settings as SettingsIcon, LogOut, ChevronLeft, ChevronRight, UserCog, UserRound, Stethoscope, CalendarCheck, FileText, Pill, NotebookPen, Bell, ClipboardList, PackageCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { getCurrentUser, hasAnyRole, logout } from '@/lib/auth';
 
 import logo from '@/assets/logo.webp';
 
 const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
     const navigate = useNavigate();
+    const currentUser = getCurrentUser();
+
     const menuItems = [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
         { icon: ShoppingCart, label: 'Punto de Venta', path: '/pos' },
@@ -16,11 +19,23 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
         { icon: Receipt, label: 'Facturación', path: '/invoicing' },
         { icon: Users, label: 'Clientes', path: '/clients' },
         { icon: SettingsIcon, label: 'Compras', path: '/purchases' },
+        { icon: UserCog, label: 'Usuarios', path: '/users', roles: ['admin'] },
+        { icon: UserRound, label: 'Pacientes', path: '/patients' },
+        { icon: Stethoscope, label: 'Doctores', path: '/doctors' },
+        { icon: CalendarCheck, label: 'Citas', path: '/appointments' },
+        { icon: FileText, label: 'Consultas', path: '/consultations' },
+        { icon: NotebookPen, label: 'Historial Clinico', path: '/medical-history' },
+        { icon: Pill, label: 'Recetas', path: '/prescriptions' },
+        { icon: PackageCheck, label: 'Surtido Recetas', path: '/prescriptions/dispensing' },
+        { icon: ClipboardList, label: 'Pedidos Recetas', path: '/prescriptions/orders' },
+        { icon: Bell, label: 'Alertas Recetas', path: '/prescriptions/alerts' },
         { icon: SettingsIcon, label: 'Configuración', path: '/settings' },
     ];
 
+    const visibleItems = menuItems.filter((item) => hasAnyRole(item.roles || []));
+
     const handleLogout = () => {
-        localStorage.clear();
+        logout();
         navigate('/login', { replace: true });
     };
 
@@ -52,12 +67,17 @@ const Sidebar = ({ isCollapsed, setIsCollapsed }) => {
                     <div className="animate-in fade-in duration-500">
                         <h1 className="font-extrabold text-xl leading-tight tracking-widest">FARMACIA</h1>
                         <p className="text-xs font-bold text-blue-200 tracking-[0.3em] uppercase mt-1">Dulce Esperanza</p>
+                        {currentUser?.role ? (
+                            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-blue-100">
+                                Rol: {currentUser.role}
+                            </p>
+                        ) : null}
                     </div>
                 )}
             </div>
 
             <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto overflow-x-hidden">
-                {menuItems.map((item, index) => (
+                {visibleItems.map((item, index) => (
                     <NavLink
                         key={index}
                         to={item.path}

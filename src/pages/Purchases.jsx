@@ -1,71 +1,77 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '@/components/layout/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Plus, Filter, Edit2, Trash2, ArrowUpDown, Loader2, Eye, Package } from 'lucide-react';
-
+import { Search, Filter, Loader2, Eye, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import Modal from '@/components/ui/modal';
-import { productsAPI } from '@/services/api';
 import { purchasesAPI } from '@/services/api';
-import { validateRequired, validatePrice, validateStock } from '@/lib/validators';
+
+const INITIAL_FILTERS = {
+    status: 'received',
+    supplier_id: '',
+    payment_method: '',
+    search: '',
+    date_from: '',
+    date_to: '',
+    min_total: '',
+    max_total: '',
+};
+
+const INITIAL_PAGINATION = {
+    page: 1,
+    limit: 5,
+    totalItems: 0,
+    totalPages: 1,
+};
 
 const Purchases = () => {
-    const [products, setProducts] = useState([]);
     const [purchases, setPurchases] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [selectedProduct, setSelectedProduct] = useState(null);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [formErrors, setFormErrors] = useState({});
+    const [filters, setFilters] = useState(INITIAL_FILTERS);
+    const [draftFilters, setDraftFilters] = useState(INITIAL_FILTERS);
 
-    //modal state
-    const [selectedSale, setSelectedSale] = useState(null);
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(5);
+    const [pagination, setPagination] = useState(INITIAL_PAGINATION);
+
+    const [selectedPurchase, setSelectedPurchase] = useState(null);
     const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-    const [loadingDetails, setLoadingDetails] = useState(false);
-    // Form state
-    const [formData, setFormData] = useState({
-        sku: '',
-        name: '',
-        category: '',
-        price: '',
-        stock: ''
-    });
 
     useEffect(() => {
-        loadProducts();
         loadPurchases();
-        console.log('Loaded purchases:', purchases);
-    }, []);
-
-    const loadProducts = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const data = await productsAPI.getAll();
-            setProducts(data);
-        } catch (err) {
-            setError(err);
-            console.error('Error loading products:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [page, limit, filters]);
 
     const loadPurchases = async () => {
         try {
             setLoading(true);
             setError(null);
-            const data = await purchasesAPI.getDetailAll();
-            console.log('Loaded purchases:', data);
-            setPurchases(data);
 
+            const response = await purchasesAPI.getDetailAll({
+                page,
+                limit,
+                ...filters,
+            });
+
+            // Compatibilidad: algunos backends devuelven Array directo y otros { data, pagination }
+            const normalizedData = Array.isArray(response) ? response : (response?.data || []);
+            const hasPagination = !Array.isArray(response) && response?.pagination;
+            const fallbackTotalPages = normalizedData.length < limit ? page : page + 1;
+
+            setPurchases(normalizedData);
+            setPagination(
+                hasPagination
+                    ? response.pagination
+                    : {
+                        page,
+                        limit,
+                        totalItems: normalizedData.length,
+                        totalPages: fallbackTotalPages,
+                    }
+            );
         } catch (err) {
             setError(err);
             console.error('Error loading purchases:', err);
@@ -74,174 +80,29 @@ const Purchases = () => {
         }
     };
 
-    const getStatus = (stock) => {
-        if (stock === 0) return 'Agotado';
-        if (stock < 20) return 'Bajo Stock';
-        return 'Disponible';
+    const applyFilters = () => {
+        setPage(1);
+        setFilters({ ...draftFilters });
     };
 
-    const validateFormData = () => {
-        const errors = {};
-        const nameResult = validateRequired(formData.name, 'El nombre');
-        if (!nameResult.valid) errors.name = nameResult.message;
-        const priceResult = validatePrice(formData.price);
-        if (!priceResult.valid) errors.price = priceResult.message;
-        if (formData.stock !== '' && formData.stock !== undefined) {
-            const stockResult = validateStock(formData.stock);
-            if (!stockResult.valid) errors.stock = stockResult.message;
-        }
-        setFormErrors(errors);
-        return Object.keys(errors).length === 0;
+    const clearFilters = () => {
+        const reset = { ...INITIAL_FILTERS };
+        setDraftFilters(reset);
+        setFilters(reset);
+        setPage(1);
     };
 
-    const handleAddProduct = async () => {
-        if (!validateFormData()) return;
-
-        setIsSubmitting(true);
-        try {
-            await productsAPI.create({
-                sku: formData.sku || `SKU-${Date.now()}`,
-                name: formData.name,
-                category: formData.category || 'General',
-                price: parseFloat(formData.price),
-                stock: parseInt(formData.stock) || 0
-            });
-            await loadProducts();
-            setIsAddModalOpen(false);
-            resetForm();
-        } catch (err) {
-            alert('Error al crear producto: ' + err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleEditProduct = async () => {
-        if (!validateFormData()) return;
-
-        setIsSubmitting(true);
-        try {
-            await productsAPI.update(selectedProduct.id, {
-                sku: formData.sku,
-                name: formData.name,
-                category: formData.category,
-                price: parseFloat(formData.price),
-                stock: parseInt(formData.stock)
-            });
-            await loadProducts();
-            setIsEditModalOpen(false);
-            setSelectedProduct(null);
-            resetForm();
-        } catch (err) {
-            alert('Error al actualizar producto: ' + err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDeleteProduct = async () => {
-        setIsSubmitting(true);
-        try {
-            await productsAPI.delete(selectedProduct.id);
-            await loadProducts();
-            setIsDeleteModalOpen(false);
-            setSelectedProduct(null);
-        } catch (err) {
-            alert('Error al eliminar: ' + err.message);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const openEditModal = (product) => {
-        setSelectedProduct(product);
-        setFormData({
-            sku: product.sku || '',
-            name: product.name,
-            category: product.category || '',
-            price: product.price.toString(),
-            stock: product.stock.toString()
-        });
-        setIsEditModalOpen(true);
-    };
-
-    const openDeleteModal = (product) => {
-        setSelectedProduct(product);
-        setIsDeleteModalOpen(true);
-    };
-
-    const resetForm = () => {
-        setFormData({ sku: '', name: '', category: '', price: '', stock: '' });
-        setFormErrors({});
-    };
-
-    const renderFieldError = (field) => {
-        if (!formErrors[field]) return null;
-        return <p className="text-red-500 text-xs mt-1 font-medium">{formErrors[field]}</p>;
-    };
-
-    const filteredProducts = products.filter(product =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.sku?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.category?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const filteredPurchases = purchases.filter(purchase =>
-        // purchase.purchase_id.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
-        purchase.supplier_id?.toString().toLowerCase().includes(searchQuery.toLowerCase()) ||
-        purchase.supplier_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        purchase.product_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        purchase.purchase.status?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const handleViewDetails = async (sale) => {
-        // console.log(sale);
-
+    const handleViewDetails = (purchase) => {
+        setSelectedPurchase(purchase);
         setIsDetailsModalOpen(true);
-        setLoadingDetails(true);
-     
-     
-
-
-        try {
-              const index = filteredPurchases.findIndex(item => item.id === sale);
-        const saleObject = filteredPurchases[index];
-            setSelectedSale(saleObject);
-        } catch (err) {
-            alert('Error al cargar detalles: ' + err.message);
-            setIsDetailsModalOpen(false);
-        } finally {
-            setLoadingDetails(false);
-        }
-
-
-
-
-
-        // console.log(saleObject);
-        // console.log('Índice:', index);
-
-
-
-        //         console.log(filteredPurchases);
-        // setSelectedSale(details);
-
-
-        // try {
-        //     const details = await salesAPI.getById(sale.id);
-        //     setSelectedSale(details);
-        // } catch (err) {
-        //     alert('Error al cargar detalles: ' + err.message);
-        //     setIsDetailsModalOpen(false);
-        // } finally {
-        //     setLoadingDetails(false);
-        // }
     };
 
-     const formatCurrency = (amount) => {
-        return `$ ${new Intl.NumberFormat('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`;
+    const formatCurrency = (amount) => {
+        return `$ ${new Intl.NumberFormat('es-NI', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(Number(amount || 0))}`;
     };
-
 
     const formatDate = (timestamp) => {
         return new Date(timestamp).toLocaleDateString('es-NI', {
@@ -249,10 +110,9 @@ const Purchases = () => {
             month: '2-digit',
             year: 'numeric',
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
         });
     };
-
 
     return (
         <Layout>
@@ -260,49 +120,119 @@ const Purchases = () => {
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h2 className="text-4xl font-black tracking-tight mb-2">Compras</h2>
-                        <p className="text-blue-100 text-lg opacity-90">Registro de compras y proveedores</p>
+                        <p className="text-blue-100 text-lg opacity-90">Compras detalladas con filtros y paginacion</p>
                     </div>
                     <Button
-                        className="bg-white text-primary hover:bg-blue-50 font-bold px-6 h-12 shadow-lg rounded-xl active:scale-95 transition-all"
-                        onClick={() => { resetForm(); setIsAddModalOpen(true); }}
+                        variant="outline"
+                        className="bg-white/90 text-primary hover:bg-white font-bold px-6 h-12 shadow-lg rounded-xl active:scale-95 transition-all"
+                        onClick={loadPurchases}
                     >
-                        <Plus className="mr-2 h-5 w-5" /> Agregar Producto
+                        <Loader2 size={18} className={cn('mr-2', loading && 'animate-spin')} />
+                        Recargar
                     </Button>
                 </div>
             </div>
 
             <div className="px-8 -mt-16 relative z-20 pb-12">
                 <Card className="border-none shadow-xl transition-all duration-300">
-                    <CardHeader className="p-6 border-b border-gray-100">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div className="relative max-w-md w-full">
+                    <CardHeader className="p-6 border-b border-gray-100 space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center gap-3">
+                            <div className="relative w-full md:max-w-md">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                                 <Input
                                     className="pl-10 h-11 bg-slate-50 border-none shadow-inner"
-                                    placeholder="Buscar por nombre, código o categoría..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Buscar por proveedor o producto"
+                                    value={draftFilters.search}
+                                    onChange={(e) => setDraftFilters((prev) => ({ ...prev, search: e.target.value }))}
                                 />
                             </div>
-                            <div className="flex items-center gap-3">
-                                <Button variant="outline" className="h-11 border-2 font-bold gap-2" onClick={loadProducts}>
-                                    <Loader2 size={18} className={loading ? 'animate-spin' : ''} /> Recargar
-                                </Button>
-                            </div>
+                            <Button className="h-11 font-bold gap-2" onClick={applyFilters}>
+                                <Filter size={18} /> Aplicar filtros
+                            </Button>
+                            <Button variant="outline" className="h-11 font-bold" onClick={clearFilters}>
+                                Limpiar
+                            </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <select
+                                className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+                                value={draftFilters.status}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, status: e.target.value }))}
+                            >
+                                <option value="received">Estado: received</option>
+                                <option value="pending">Estado: pending</option>
+                                <option value="cancelled">Estado: cancelled</option>
+                                <option value="">Estado: backend default</option>
+                            </select>
+
+                            <Input
+                                placeholder="supplier_id"
+                                value={draftFilters.supplier_id}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, supplier_id: e.target.value }))}
+                            />
+
+                            <Input
+                                placeholder="payment_method"
+                                value={draftFilters.payment_method}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, payment_method: e.target.value }))}
+                            />
+
+                            <select
+                                className="h-11 rounded-md border border-input bg-background px-3 text-sm"
+                                value={limit}
+                                onChange={(e) => {
+                                    const newLimit = Number(e.target.value);
+                                    setLimit(newLimit);
+                                    setPage(1);
+                                }}
+                            >
+                                <option value={5}>5 por pagina</option>
+                                <option value={10}>10 por pagina</option>
+                                <option value={20}>20 por pagina</option>
+                                <option value={50}>50 por pagina</option>
+                            </select>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <Input
+                                type="date"
+                                value={draftFilters.date_from}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, date_from: e.target.value }))}
+                            />
+                            <Input
+                                type="date"
+                                value={draftFilters.date_to}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, date_to: e.target.value }))}
+                            />
+                            <Input
+                                type="number"
+                                placeholder="min_total"
+                                value={draftFilters.min_total}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, min_total: e.target.value }))}
+                            />
+                            <Input
+                                type="number"
+                                placeholder="max_total"
+                                value={draftFilters.max_total}
+                                onChange={(e) => setDraftFilters((prev) => ({ ...prev, max_total: e.target.value }))}
+                            />
                         </div>
                     </CardHeader>
+
                     <CardContent className="p-0">
                         {loading ? (
                             <div className="flex justify-center items-center py-20">
                                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
                             </div>
                         ) : error ? (
-                            <div className="text-center py-20 text-r const formatCurrency = (amount) => {
-        return `$ ${new Intl.NumberFormat('es-NI', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)}`;
-    };
-ed-500">
-                                <p>Error al cargar productos</p>
-                                <Button onClick={loadProducts} className="mt-4">Reintentar</Button>
+                            <div className="text-center py-20 text-red-500">
+                                <p>Error al cargar compras: {error.message}</p>
+                                <Button onClick={loadPurchases} className="mt-4">Reintentar</Button>
+                            </div>
+                        ) : purchases.length === 0 ? (
+                            <div className="text-center py-20 text-gray-500">
+                                <p>No hay compras para los filtros aplicados.</p>
                             </div>
                         ) : (
                             <>
@@ -310,105 +240,78 @@ ed-500">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
                                             <tr className="bg-slate-50/50 border-b border-gray-100">
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">ID Compra</th>
+                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">ID</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Proveedor</th>
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Cantindad de productos</th>
-
-
-
+                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Cantidad</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider text-right">Total</th>
-                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Método Pago</th>
+                                                <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Pago</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider text-center">Estado</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider">Fecha</th>
                                                 <th className="px-6 py-4 text-sm font-bold text-gray-400 uppercase tracking-wider text-right">Acciones</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-50">
-                                            {filteredPurchases.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="7" className="px-6 py-12 text-center text-gray-500">No hay compras registradas</td>
-                                                </tr>
-                                            ) : (
-                                                filteredPurchases.map((purchase) => {
-
-                                                    // console.log(purchase);
-                                                    return (
-                                                        // <tr key={purchase.id} className="hover:bg-blue-50/30 transition-colors group">
-                                                        <tr
-                                                            key={purchase.id}
+                                            {purchases.map((purchase) => (
+                                                <tr key={purchase.id} className="transition-colors group hover:bg-blue-50/30">
+                                                    <td className="px-6 py-4 font-mono text-xs text-gray-800 font-bold">#{purchase.id}</td>
+                                                    <td className="px-6 py-4 font-medium text-gray-800">{purchase.supplier_name || '-'}</td>
+                                                    <td className="px-6 py-4 font-medium text-gray-800">{purchase.total_quantity || '-'}</td>
+                                                    <td className="px-6 py-4 text-right font-black text-gray-700">{formatCurrency(purchase.total)}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="bg-blue-50 px-3 py-1 rounded-full text-xs font-semibold text-blue-600 border border-blue-200">
+                                                            {purchase.payment_method || 'N/A'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <span
                                                             className={cn(
-                                                                "transition-colors group",
-                                                                parseFloat(purchase.cost_price || 0) > parseFloat(purchase.price_venta || 0)
-                                                                    ? "bg-red-50 text-red-700 hover:bg-red-100"
-                                                                    : "hover:bg-blue-50/30"
+                                                                'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border',
+                                                                purchase.status === 'received' && 'bg-green-50 text-green-600 border-green-200',
+                                                                purchase.status === 'pending' && 'bg-orange-50 text-orange-600 border-orange-200',
+                                                                purchase.status === 'cancelled' && 'bg-red-50 text-red-600 border-red-200',
+                                                                !purchase.status && 'bg-gray-50 text-gray-600 border-gray-200'
                                                             )}
                                                         >
-                                                            <td className="px-6 py-4 font-mono text-xs text-gray-800 font-bold">#{purchase.id}</td>
-                                                            <td className="px-6 py-4">
-                                                                <span className="font-medium text-gray-800">{purchase.supplier_name || '-'}</span>
-                                                            </td>
-                                                            <td className="px-6 py-4">
-                                                                <span className="font-medium text-gray-800">{purchase.total_quantity || '-'}</span>
-                                                            </td>
-
-
-
-
-                                                            {/* <td className="px-6 py-4">
-                                                                $ {parseFloat(purchase.cost_price || 0).toFixed(2)}
-                                                            </td> */}
-
-                                                            <td className="px-6 py-4 text-right font-black text-gray-700">
-                                                                ${parseFloat((purchase.total) || 0).toFixed(2)}
-                                                            </td>
-                                                            <td className="px-6 py-4">
-                                                                <span className="bg-blue-50 px-3 py-1 rounded-full text-xs font-semibold text-blue-600 border border-blue-200">
-                                                                    {purchase.payment_method || 'N/A'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center">
-                                                                <span className={cn(
-                                                                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border",
-                                                                    purchase.status === 'Completada' && "bg-green-50 text-green-600 border-green-200",
-                                                                    purchase.status === 'Pendiente' && "bg-orange-50 text-orange-600 border-orange-200",
-                                                                    purchase.status === 'Cancelada' && "bg-red-50 text-red-600 border-red-200",
-                                                                    !purchase.status && "bg-gray-50 text-gray-600 border-gray-200"
-                                                                )}>
-                                                                    {purchase.status || 'Desconocido'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-6 py-4 text-sm text-gray-600">
-                                                                {new Date(purchase.timestamp).toLocaleDateString('es-NI')}
-                                                            </td>
-                                                            <td className="px-6 py-4 text-right">
-                                                                <div className="flex justify-end gap-2">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-9 w-9 text-gray-400 hover:text-primary hover:bg-blue-50"
-                                                                        onClick={() => handleViewDetails(purchase.id)}
-                                                                    >
-                                                                        <Eye size={18} />
-                                                                    </Button>
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-100" onClick={() => openEditModal(purchase)}>
-                                                                        <Edit2 size={16} />
-                                                                    </Button>
-                                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600 hover:bg-red-100" onClick={() => openDeleteModal(purchase)}>
-                                                                        <Trash2 size={16} />
-                                                                    </Button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )}
+                                                            {purchase.status || 'unknown'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-600">{formatDate(purchase.timestamp)}</td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-9 w-9 text-gray-400 hover:text-primary hover:bg-blue-50"
+                                                            onClick={() => handleViewDetails(purchase)}
+                                                        >
+                                                            <Eye size={18} />
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
                                         </tbody>
                                     </table>
                                 </div>
-                                <div className="p-6 border-t border-gray-100 flex justify-between items-center bg-slate-50/30">
+
+                                <div className="p-6 border-t border-gray-100 flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-slate-50/30">
                                     <span className="text-sm text-muted-foreground font-medium">
-                                        Mostrando {filteredPurchases.length} de {purchases.length} compras
+                                        Pagina {pagination.page} de {pagination.totalPages} - {pagination.totalItems} compras
                                     </span>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            disabled={pagination.page <= 1}
+                                            onClick={() => setPage((prev) => Math.max(prev - 1, 1))}
+                                        >
+                                            Anterior
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            disabled={pagination.page >= pagination.totalPages}
+                                            onClick={() => setPage((prev) => Math.min(prev + 1, pagination.totalPages))}
+                                        >
+                                            Siguiente
+                                        </Button>
+                                    </div>
                                 </div>
                             </>
                         )}
@@ -416,34 +319,27 @@ ed-500">
                 </Card>
             </div>
 
-            {/* Sale Details Modal */}
             <Modal
                 isOpen={isDetailsModalOpen}
                 onClose={() => setIsDetailsModalOpen(false)}
-                title={`Detalle de Venta #${selectedSale?.id || ''}`}
+                title={`Detalle de Compra #${selectedPurchase?.id || ''}`}
                 className="max-w-2xl"
-                footer={
-                    <Button onClick={() => setIsDetailsModalOpen(false)}>Cerrar</Button>
-                }
+                footer={<Button onClick={() => setIsDetailsModalOpen(false)}>Cerrar</Button>}
             >
-                {loadingDetails ? (
-                    <div className="flex justify-center py-12">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                ) : selectedSale ? (
+                {selectedPurchase ? (
                     <div className="space-y-6">
                         <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-gray-100">
                             <div>
                                 <p className="text-xs font-bold text-gray-400 uppercase">Fecha</p>
-                                <p className="font-semibold text-gray-800">{formatDate(selectedSale.timestamp)}</p>
+                                <p className="font-semibold text-gray-800">{formatDate(selectedPurchase.timestamp)}</p>
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">Provedor</p>
-                                <p className="font-semibold text-gray-800">{selectedSale.name || 'Provedor Final'}</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Proveedor</p>
+                                <p className="font-semibold text-gray-800">{selectedPurchase.supplier_name || '-'}</p>
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-gray-400 uppercase">Método de Pago</p>
-                                <p className="font-semibold text-gray-800">{selectedSale.payment_method}</p>
+                                <p className="text-xs font-bold text-gray-400 uppercase">Metodo de Pago</p>
+                                <p className="font-semibold text-gray-800">{selectedPurchase.payment_method || '-'}</p>
                             </div>
                         </div>
 
@@ -462,19 +358,19 @@ ed-500">
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
-                                        {selectedSale.purchase_items?.map((item, idx) => (
-                                            <tr key={idx}>
-                                                <td className="px-4 py-3 font-medium text-gray-800">{item.name || `Producto #${item.product_id}`}</td>
+                                        {selectedPurchase.purchase_items?.map((item) => (
+                                            <tr key={item.id}>
+                                                <td className="px-4 py-3 font-medium text-gray-800">{item.name || '-'}</td>
                                                 <td className="px-4 py-3 text-center">{item.quantity}</td>
                                                 <td className="px-4 py-3 text-right">{formatCurrency(item.cost_price)}</td>
-                                                <td className="px-4 py-3 text-right font-bold">{formatCurrency(item.quantity * item.cost_price)}</td>
+                                                <td className="px-4 py-3 text-right font-bold">{formatCurrency(Number(item.quantity) * Number(item.cost_price))}</td>
                                             </tr>
                                         ))}
                                     </tbody>
                                     <tfoot className="bg-blue-50/50 font-bold text-gray-800">
                                         <tr>
                                             <td colSpan="3" className="px-4 py-3 text-right">Total</td>
-                                            <td className="px-4 py-3 text-right text-primary text-lg">{formatCurrency(selectedSale.total)}</td>
+                                            <td className="px-4 py-3 text-right text-primary text-lg">{formatCurrency(selectedPurchase.total)}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -482,170 +378,6 @@ ed-500">
                         </div>
                     </div>
                 ) : null}
-            </Modal>
-
-            {/* Add Product Modal */}
-            <Modal
-                isOpen={isAddModalOpen}
-                onClose={() => setIsAddModalOpen(false)}
-                title="Agregar Nuevo Producto"
-                footer={
-                    <>
-                        <Button variant="outline" onClick={() => setIsAddModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                        <Button onClick={handleAddProduct} disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : 'Guardar Producto'}
-                        </Button>
-                    </>
-                }
-            >
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Nombre del Producto *</label>
-                            <Input
-                                placeholder="Ej. Paracetamol 500mg"
-                                value={formData.name}
-                                onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFormErrors({ ...formErrors, name: undefined }); }}
-                                className={formErrors.name ? 'border-red-400' : ''}
-                            />
-                            {renderFieldError('name')}
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Código / SKU</label>
-                            <Input
-                                placeholder="Ej. PARA-001"
-                                value={formData.sku}
-                                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Categoría</label>
-                        <Input
-                            placeholder="Ej. Analgésicos"
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Precio ($) *</label>
-                            <Input
-                                type="number"
-                                placeholder="0.00"
-                                min="0"
-                                step="0.01"
-                                value={formData.price}
-                                onChange={(e) => { setFormData({ ...formData, price: e.target.value }); setFormErrors({ ...formErrors, price: undefined }); }}
-                                className={formErrors.price ? 'border-red-400' : ''}
-                            />
-                            {renderFieldError('price')}
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Stock Inicial</label>
-                            <Input
-                                type="number"
-                                placeholder="0"
-                                min="0"
-                                value={formData.stock}
-                                onChange={(e) => { setFormData({ ...formData, stock: e.target.value }); setFormErrors({ ...formErrors, stock: undefined }); }}
-                                className={formErrors.stock ? 'border-red-400' : ''}
-                            />
-                            {renderFieldError('stock')}
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Edit Product Modal */}
-            <Modal
-                isOpen={isEditModalOpen}
-                onClose={() => setIsEditModalOpen(false)}
-                title="Editar Producto"
-                footer={
-                    <>
-                        <Button variant="outline" onClick={() => setIsEditModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                        <Button onClick={handleEditProduct} disabled={isSubmitting}>
-                            {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
-                        </Button>
-                    </>
-                }
-            >
-                <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Nombre del Producto *</label>
-                            <Input
-                                placeholder="Ej. Paracetamol 500mg"
-                                value={formData.name}
-                                onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setFormErrors({ ...formErrors, name: undefined }); }}
-                                className={formErrors.name ? 'border-red-400' : ''}
-                            />
-                            {renderFieldError('name')}
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Código / SKU</label>
-                            <Input
-                                placeholder="Ej. PARA-001"
-                                value={formData.sku}
-                                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Categoría</label>
-                        <Input
-                            placeholder="Ej. Analgésicos"
-                            value={formData.category}
-                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Precio ($) *</label>
-                            <Input
-                                type="number"
-                                placeholder="0.00"
-                                min="0"
-                                step="0.01"
-                                value={formData.price}
-                                onChange={(e) => { setFormData({ ...formData, price: e.target.value }); setFormErrors({ ...formErrors, price: undefined }); }}
-                                className={formErrors.price ? 'border-red-400' : ''}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-gray-700">Stock</label>
-                            <Input
-                                type="number"
-                                placeholder="0"
-                                value={formData.stock}
-                                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Delete Confirmation Modal */}
-            <Modal
-                isOpen={isDeleteModalOpen}
-                onClose={() => setIsDeleteModalOpen(false)}
-                title="Eliminar Producto"
-                footer={
-                    <>
-                        <Button variant="outline" onClick={() => setIsDeleteModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-                        <Button variant="destructive" onClick={handleDeleteProduct} disabled={isSubmitting}>
-                            {isSubmitting ? 'Eliminando...' : 'Eliminar'}
-                        </Button>
-                    </>
-                }
-            >
-                <div className="py-4">
-                    <p className="text-gray-600">
-                        ¿Estás seguro de que deseas eliminar <strong>{selectedProduct?.name}</strong>?
-                    </p>
-                    <p className="text-sm text-gray-500 mt-2">Esta acción no se puede deshacer.</p>
-                </div>
             </Modal>
         </Layout>
     );
